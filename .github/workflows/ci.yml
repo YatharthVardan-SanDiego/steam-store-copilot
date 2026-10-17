@@ -1,0 +1,72 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+      - run: ruff check .
+
+  unit-tests:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q --ignore=tests/test_pipeline.py
+
+  pipeline-definition:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Compile SageMaker Pipeline definition (offline)
+        run: pytest -q tests/test_pipeline.py
+
+  deploy-pipeline:
+    # CD: on main, upsert + start the SageMaker Pipeline when AWS credentials are configured.
+    # AWS Academy credentials expire every session, so the job skips cleanly without them.
+    needs: pipeline-definition
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      HAS_AWS: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_DEFAULT_REGION: us-east-1
+      SAGEMAKER_ROLE_ARN: ${{ secrets.SAGEMAKER_ROLE_ARN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        if: env.HAS_AWS == 'true'
+        with:
+          python-version: "3.11"
+          cache: pip
+      - if: env.HAS_AWS == 'true'
+        run: pip install -r requirements.txt
+      - name: Start training pipeline
+        if: env.HAS_AWS == 'true'
+        run: python -m scripts.run_pipeline
+      - name: Skip (no AWS credentials configured)
+        if: env.HAS_AWS != 'true'
+        run: echo "AWS secrets not set - pipeline deploy skipped."

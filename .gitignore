@@ -1,0 +1,27 @@
+# Raw data lives in S3 - never commit it
+/steam-data/
+/data/
+*.csv
+*.json.gz
+*.zip
+!tests/fixtures/*.csv
+
+# Model artifacts live in S3 / Model Registry
+*.joblib
+*.tar.gz
+/model/
+
+# Python / Jupyter
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# Credentials
+.aws/
+.kaggle/
+kaggle.json
+.env
