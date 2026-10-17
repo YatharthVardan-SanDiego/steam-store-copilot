@@ -67,15 +67,20 @@ def split_for(app_id: int, release_date) -> str:
 
 
 def build_tag_dataset(games: pd.DataFrame) -> pd.DataFrame:
-    """Raw store games -> one cleaned row per game with draft features + labels."""
-    df = games.copy()
+    """Raw store games -> one cleaned row per game with draft features + labels.
+
+    Written to stay well under 2 GB of RAM on the full 125k-game file: only the
+    needed columns are copied, and cheap filters run before text processing.
+    """
+    keep = ["app_id", "name", "description", "tags", "price", "required_age", "windows",
+            "mac", "linux", "developers", "publishers", "release_date"]
+    df = games.loc[games["tags"].map(len) > 0, keep].copy()
     df["description"] = df["description"].map(strip_bbcode)
     df = df[df["description"].str.len() >= MIN_DESCRIPTION_CHARS]
-    df = df[df["tags"].map(len) > 0]
     df = df[df["description"].map(latin_share) >= MIN_LATIN_SHARE]
 
     df["desc_chars"] = df["description"].str.len()
-    df["desc_words"] = df["description"].str.split().map(len)
+    df["desc_words"] = df["description"].str.count(r"\S+")
     df["tags_22"] = df["tags"].map(lambda ts: [t for t in TAGS if t in set(ts)])
     df["n_tags_22"] = df["tags_22"].map(len)
     df["developers"] = df["developers"].fillna("").astype(str)
