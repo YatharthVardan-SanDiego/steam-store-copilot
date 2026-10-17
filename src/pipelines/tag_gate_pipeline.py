@@ -197,9 +197,12 @@ def get_pipeline(role: str, bucket: str | None = None, region: str | None = None
 
 
 def default_role() -> str:
-    """Execution role inside SageMaker Studio (LabRole in AWS Academy)."""
-    try:
+    """Execution role: Studio's role inside SageMaker, otherwise the Learner Lab LabRole.
+
+    Outside SageMaker, get_execution_role() would return the *caller's* role
+    (``voclabs`` in AWS Academy), which SageMaker jobs cannot assume.
+    """
+    if os.path.exists("/opt/ml/metadata/resource-metadata.json"):
         return sagemaker.get_execution_role()
-    except ValueError:
-        account = boto3.client("sts").get_caller_identity()["Account"]
-        return f"arn:aws:iam::{account}:role/LabRole"
+    account = boto3.client("sts").get_caller_identity()["Account"]
+    return f"arn:aws:iam::{account}:role/LabRole"

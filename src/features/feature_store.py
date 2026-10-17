@@ -81,10 +81,42 @@ def create_feature_group(name: str, df: pd.DataFrame, offline_uri: str, role: st
     return fg
 
 
-def ingest(fg, df: pd.DataFrame, max_workers: int = 4) -> None:
-    start = time.time()
-    fg.ingest(data_frame=df, max_workers=max_workers, wait=True)
-    print(f"Ingested {len(df):,} records into {fg.name} in {time.time() - start:.0f}s")
+def _to_record(row: dict) -> list[dict]:
+    return [{"FeatureName": k, "ValueAsString": str(v)} for k, v in row.items()
+            if v is not None and not (isinstance(v, float) and pd.isna(v))]
+
+
+def ingest(fg, df: pd.DataFrame, max_workers: int = 16, report_every: int = 10_000) -> None:
+    """PutRecord every row with a thread pool.
+
+    Used instead of ``FeatureGroup.ingest``, whose multiprocessing pool can
+    deadlock on macOS; threads behave the same on a laptop and in Studio.
+    Throttled calls are retried by botocore's adaptive retry mode.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from botocore.config import Config
+
+    runtime = fg.sagemaker_session.boto_session.client(
+        "sagemaker-featurestore-runtime",
+        config=Config(max_pool_connections=max_workers * 2,
+                      retries={"max_attempts": 10, "mode": "adaptive"}))
+    records = df.to_dict("records")
+
+    def put(rows: list[dict]) -> int:
+        for row in rows:
+            runtime.put_record(FeatureGroupName=fg.name, Record=_to_record(row))
+        return len(rows)
+
+    start, done = time.time(), 0
+    chunks = [records[i:i + 100] for i in range(0, len(records), 100)]
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        for future in as_completed([pool.submit(put, c) for c in chunks]):
+            done += future.result()
+            if done % report_every < 100 or done == len(records):
+                print(f"  {fg.name}: {done:,}/{len(records):,} records "
+                      f"({time.time() - start:.0f}s)", flush=True)
+    print(f"Ingested {len(records):,} records into {fg.name} in {time.time() - start:.0f}s")
 
 
 def snapshot_query(table: str) -> str:
