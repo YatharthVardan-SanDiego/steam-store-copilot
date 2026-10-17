@@ -117,6 +117,11 @@ Where the gap to the baseline is narrow, the smaller model wins — retraining c
 | False-approval rate (ceiling 5%) | — | 4.6% |
 | Reception PR-AUC (prevalence 0.152) | 0.152 | **0.38** |
 
+On the **incoming 2025 batch** (5,855 drafts never seen in training, 20% deliberately mismatched) the approved model
+reaches macro-F1 0.635, auto-approves 44.8% of genuine drafts and falsely approves 3.9% of mismatched ones. Model
+Monitor flags real drift on this batch (fewer community tags on new releases, price distribution shift), which
+triggered an automatic `retrain-on-drift` pipeline run.
+
 Most of the tag-gate lift comes from per-tag threshold tuning (baseline + tuned thresholds reaches 0.607) — calibration matters more than capacity here.
 
 ## Goals

@@ -94,15 +94,17 @@ Notebook 06: output table and the decisions chart; optionally the `.jsonl.out` f
 
 > Batch Transform runs the latest approved model on incoming drafts: games released in 2025 that the model never saw.
 > Twenty percent of drafts are deliberately paired with another game's tags, simulating copy written for the wrong game.
-> Each output line has the predicted tags, an agreement score and a decision. Mismatched drafts are mostly rejected.
+> Each output line has the predicted tags, an agreement score and a decision. On this batch the gate auto-approves 45
+> percent of genuine drafts and lets through under 4 percent of mismatched ones.
 
 ## 8. Monitoring (Sachin, ~90 s)
 
 Notebook 07: baseline statistics table, violations table, PSI chart. Then **CloudWatch → Dashboards → SteamStoreCopilot**.
 
-> Model Monitor builds a baseline from the training features and checks every batch against it. The real 2025 batch is
-> close to baseline. A simulated upstream failure, with truncated copy and a cents-versus-dollars pricing bug, triggers
-> violations and large PSI drift. The CloudWatch dashboard combines infrastructure metrics (CPU and memory for training,
+> Model Monitor builds a baseline from the training features and checks every batch against it. Even the real 2025
+> batch shows drift: new games carry fewer community tags, and prices shifted, so Model Monitor flags a violation. A
+> simulated upstream failure, with truncated copy and a cents-versus-dollars pricing bug, triggers three violations and
+> drift in five features. The CloudWatch dashboard combines infrastructure metrics (CPU and memory for training,
 > processing and batch transform jobs) with our model and business metrics. When drift is detected, the retraining
 > trigger starts the pipeline automatically, and the new run appears here as retrain-on-drift.
 

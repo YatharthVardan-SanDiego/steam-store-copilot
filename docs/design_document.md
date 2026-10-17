@@ -149,7 +149,8 @@ explicit human approval in the registry, which gives trust and safety a sign-off
 Because drafts are reviewed in batches and no user is waiting on a response, deployment uses **SageMaker Batch
 Transform** rather than a real-time endpoint, which removes always-on endpoint cost. Notebook 06 loads the latest
 approved model package and scores the incoming-drafts stream (5,855 games released in 2025, 20% deliberately paired
-with another game's tags) as JSON Lines. The custom inference handler (`src/models/tag_gate/inference.py`) returns
+with another game's tags) as JSON Lines: macro-F1 0.635, 44.8% of genuine drafts auto-approved, 3.9% of mismatched
+drafts falsely approved, and 0.3% routed to human review. The custom inference handler (`src/models/tag_gate/inference.py`) returns
 predicted tags, the agreement score, the top probabilities and a decision of approve, reject or human_review (the last
 for games with none of the 22 tags). The Reception Estimator is deployed the same way over the most recent review
 period, and its output ranks titles for human audit.
@@ -159,16 +160,21 @@ period, and its output ranks titles for human audit.
 Monitoring (notebook 07, `src/monitoring/`) covers data quality, model quality and infrastructure. **SageMaker Model
 Monitor** builds a baseline (statistics and constraints) from the training split's tabular features, and the Model
 Monitor analyzer container then checks each batch against it and writes `constraint_violations.json`. We also compute a
-Population Stability Index per feature (drift if PSI > 0.2). The real 2025 batch stays close to the baseline, while a
-simulated upstream failure (truncated LLM copy and a cents-versus-dollars price bug) produces violations and large PSI
-values, which demonstrates that the checks detect what they are meant to detect.
+Population Stability Index per feature (drift if PSI > 0.2). On the real 2025 batch, Model Monitor reported one
+violation (price distribution drift, distance 0.10) and PSI flagged `n_tags_22` (0.29): newly released games carry
+fewer community tags, because tags accumulate after release. This is genuine drift between training data and the
+production stream, and it is the kind of shift the retraining policy exists for. A simulated upstream failure
+(truncated LLM copy, a cents-versus-dollars price bug and invalid age ratings) produced three violations and PSI
+values up to 7.3 across five features, which confirms that the checks catch a broken feed.
 
 Model and business quality are computed from the batch output (macro-F1 on genuine drafts, auto-approval,
 false-approval and human-review rates) and published as custom **CloudWatch** metrics. A CloudWatch dashboard
 combines them with infrastructure metrics (CPU and memory of training, processing and transform jobs). A retraining
 policy (`retrain.should_retrain`) fires on feature drift, data-quality violations, a macro-F1 drop above 0.05, or a
-false-approval rate above the ceiling, and starts the training pipeline. The trigger is also wired as a CloudWatch
-alarm with an EventBridge rule where account permissions allow.
+false-approval rate above the ceiling, and starts the training pipeline; in our run it started a `retrain-on-drift`
+pipeline execution automatically. The same trigger is wired as a CloudWatch alarm (`steam-tag-gate-drift`) with an
+EventBridge rule that starts the pipeline when the alarm fires. On the 2025 batch itself, model quality held up
+(macro-F1 0.635, auto-approval 44.8%, false-approval 3.9%), so the drift is a leading indicator rather than an outage.
 
 ### 4.7 CI/CD
 
