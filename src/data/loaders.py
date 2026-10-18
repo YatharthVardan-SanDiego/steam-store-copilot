@@ -68,9 +68,9 @@ def load_store_games(path: PathOrBuffer) -> pd.DataFrame:
     """Load Fronkon ``games.csv`` with the pinned 40-column schema."""
     df = pd.read_csv(
         path,
-        header=None,
-        skiprows=1,  # the malformed 39-field header
-        names=STORE_COLUMNS,
+        # header=None,
+        # skiprows=1,  # the malformed 39-field header
+        # names=STORE_COLUMNS,
         usecols=list(STORE_RENAME),
         dtype={"About the game": "string", "Tags": "string", "Genres": "string"},
         keep_default_na=False,
